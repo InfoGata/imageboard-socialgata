@@ -1,0 +1,7 @@
+{
+  "id": "IB4ch4nPl9n",
+  "name": "Imageboard Plugin for SocialGata",
+  "version": "1.0.0",
+  "description": "Browse imageboards like 4chan, lainchan, leftypol, endchan, and 2ch.hk",
+  "script": "dist/index.js"
+}
