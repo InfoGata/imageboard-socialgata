@@ -3,5 +3,7 @@
   "name": "Imageboard Plugin for SocialGata",
   "version": "1.0.0",
   "description": "Browse imageboards like 4chan, lainchan, leftypol, endchan, and 2ch.hk",
-  "script": "dist/index.js"
+  "script": "dist/index.js",
+  "updateUrl": "https://cdn.jsdelivr.net/gh/InfoGata/imageboard-socialgata@latest/manifest.json",
+  "homepage": "https://github.com/InfoGata/imageboard-socialgata"
 }
