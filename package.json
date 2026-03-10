@@ -8,7 +8,7 @@
     "@radix-ui/react-slot": "^1.2.4",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
-    "imageboard": "^0.11.5",
+    "imageboard": "github:elijahgreen/imageboard",
     "preact": "^10.11.2",
     "social-components": "^0.4.5",
     "tailwind-merge": "^2.2.0",
