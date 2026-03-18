@@ -22,6 +22,32 @@ const getCorsProxy = (): string => {
   return localStorage.getItem(CORS_PROXY_KEY) || DEFAULT_CORS_PROXY;
 };
 
+// Thread URL patterns per imageboard (from imageboard library configs)
+const THREAD_URL_PATTERNS: Record<string, string> = {
+  "4chan": "/{boardId}/thread/{threadId}",
+  lainchan: "/{boardId}/res/{threadId}.html",
+  leftypol: "/{boardId}/res/{threadId}.html",
+  endchan: "/{boardId}/res/{threadId}.html",
+  "2ch": "/{boardId}/res/{threadId}.html",
+};
+
+/**
+ * Build the original URL for a thread on its imageboard website
+ */
+const getThreadOriginalUrl = (
+  instanceId: string,
+  boardId: string,
+  threadId: string | number
+): string | undefined => {
+  const instance = SUPPORTED_IMAGEBOARDS.find((ib) => ib.apiId === instanceId);
+  const pattern = THREAD_URL_PATTERNS[instanceId];
+  if (!instance?.url || !pattern) return undefined;
+  const path = pattern
+    .replace("{boardId}", boardId)
+    .replace("{threadId}", String(threadId));
+  return `${instance.url}${path}`;
+};
+
 // Supported imageboards as instances (using library's supported IDs)
 const SUPPORTED_IMAGEBOARDS: Instance[] = [
   {
@@ -204,6 +230,7 @@ const imageboardThreadToPost = (thread: Thread, instanceId: string): Post => {
     instanceId: instanceId,
     thumbnailUrl: thumbnailUrl,
     url: attachmentUrl,
+    originalUrl: getThreadOriginalUrl(instanceId, thread.boardId, thread.id),
     numOfComments: thread.commentsCount,
     number: Number(thread.id),
   };
@@ -214,7 +241,9 @@ const imageboardThreadToPost = (thread: Thread, instanceId: string): Post => {
  */
 const imageboardCommentToPost = (
   comment: Comment,
-  instanceId: string
+  instanceId: string,
+  boardId?: string,
+  threadId?: string | number
 ): Post => {
   const instanceUrl = getInstanceUrl(instanceId);
   const thumbnailAttachment =
@@ -241,6 +270,10 @@ const imageboardCommentToPost = (
     instanceId: instanceId,
     thumbnailUrl: thumbnailUrl,
     url: attachmentUrl,
+    originalUrl:
+      boardId && threadId
+        ? getThreadOriginalUrl(instanceId, boardId, threadId)
+        : undefined,
     number: Number(comment.id),
   };
 };
@@ -448,6 +481,7 @@ const getComments = async (
       instanceId: instanceId,
       thumbnailUrl: attachmentUrl,
       url: attachmentUrl,
+      originalUrl: getThreadOriginalUrl(instanceId, boardId, thread.id),
       numOfComments: thread.commentsCount,
       number: Number(thread.id),
     };
@@ -455,7 +489,7 @@ const getComments = async (
     // Rest are comments (skip first comment which is OP)
     const comments = thread.comments?.slice(1) || [];
     const items = comments.map((comment) =>
-      imageboardCommentToPost(comment, instanceId)
+      imageboardCommentToPost(comment, instanceId, boardId, threadId)
     );
 
     return {
