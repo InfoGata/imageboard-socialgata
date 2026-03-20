@@ -32,6 +32,18 @@ const THREAD_URL_PATTERNS: Record<string, string> = {
 };
 
 /**
+ * Build the original URL for a board on its imageboard website
+ */
+const getBoardOriginalUrl = (
+  instanceId: string,
+  boardId: string
+): string | undefined => {
+  const instance = SUPPORTED_IMAGEBOARDS.find((ib) => ib.apiId === instanceId);
+  if (!instance?.url) return undefined;
+  return `${instance.url}/${boardId}/`;
+};
+
+/**
  * Build the original URL for a thread on its imageboard website
  */
 const getThreadOriginalUrl = (
@@ -383,6 +395,7 @@ const getCommunity = async (
         name: boardId,
         instanceId: instanceId,
         description: boardInfo?.title || `/${boardId}/`,
+        originalUrl: getBoardOriginalUrl(instanceId, boardId),
       },
       items,
       pageInfo: {},
@@ -395,6 +408,7 @@ const getCommunity = async (
         name: boardId,
         instanceId: instanceId,
         description: `/${boardId}/`,
+        originalUrl: getBoardOriginalUrl(instanceId, boardId),
       },
       items: [],
       pageInfo: {},
@@ -423,6 +437,7 @@ const getCommunities = async (
       name: board.id,
       instanceId: instanceId,
       description: board.title || `/${board.id}/`,
+      originalUrl: getBoardOriginalUrl(instanceId, board.id),
     }));
 
     return {
