@@ -13,7 +13,6 @@ import {
   getAttachmentThumbnailSize,
 } from "social-components/attachment";
 
-const pluginName = "imageboard";
 const CORS_PROXY_KEY = "imageboard_cors_proxy";
 const DEFAULT_CORS_PROXY = "https://vercelcors-elijahgreen-info-gata.vercel.app/api?url=";
 
@@ -238,7 +237,6 @@ const imageboardThreadToPost = (thread: Thread, instanceId: string): Post => {
     communityName: `/${thread.boardId}/`,
     authorName: firstComment?.authorName || "Anonymous",
     authorApiId: firstComment?.authorId,
-    pluginId: pluginName,
     instanceId: instanceId,
     thumbnailUrl: thumbnailUrl,
     url: attachmentUrl,
@@ -278,7 +276,6 @@ const imageboardCommentToPost = (
     publishedDate: comment.createdAt?.toISOString(),
     authorName: comment.authorName || "Anonymous",
     authorApiId: comment.authorId,
-    pluginId: pluginName,
     instanceId: instanceId,
     thumbnailUrl: thumbnailUrl,
     url: attachmentUrl,
@@ -492,7 +489,6 @@ const getComments = async (
       communityName: `/${thread.boardId}/`,
       authorName: opComment?.authorName || "Anonymous",
       authorApiId: opComment?.authorId,
-      pluginId: pluginName,
       instanceId: instanceId,
       thumbnailUrl: attachmentUrl,
       url: attachmentUrl,
