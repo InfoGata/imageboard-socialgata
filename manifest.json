@@ -5,5 +5,13 @@
   "description": "Browse imageboards like 4chan, lainchan, leftypol, endchan, and 2ch.hk",
   "script": "dist/index.js",
   "updateUrl": "https://cdn.jsdelivr.net/gh/InfoGata/imageboard-socialgata@latest/manifest.json",
-  "homepage": "https://github.com/InfoGata/imageboard-socialgata"
+  "homepage": "https://github.com/InfoGata/imageboard-socialgata",
+  "siteMatch": [
+    "https://4chan.org/*",
+    "https://boards.4chan.org/*",
+    "https://lainchan.org/*",
+    "https://leftypol.org/*",
+    "https://endchan.net/*",
+    "https://2ch.hk/*"
+  ]
 }
