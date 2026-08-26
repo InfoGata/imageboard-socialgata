@@ -9,8 +9,8 @@ import type {
 } from "imageboard";
 import { createHttpRequestFunction } from "imageboard";
 import {
-  doesAttachmentHavePicture,
   getAttachmentThumbnailSize,
+  getPicturesAndVideos,
 } from "social-components/attachment";
 
 const CORS_PROXY_KEY = "imageboard_cors_proxy";
@@ -193,21 +193,79 @@ const toAbsoluteUrl = (
 };
 
 /**
- * Extract image/video URL from attachment
+ * Flatten a comment's attachments into the media fields of a Post.
+ *
+ * A vichan post can carry several files (leftypol allows up to five), mixing
+ * images and videos in the order the author attached them, so all of them go
+ * into `images` — SocialGata renders that as a carousel. `thumbnailUrl` /
+ * `url` / `isVideo` keep describing the first attachment, which is what the
+ * feed preview shows.
+ *
+ * The thumbnail comes from `getAttachmentThumbnailSize`, never from the file
+ * itself: a video's thumbnail is a separate `.jpg`/`.png`, and using the file
+ * url would hand the browser an `<img src="....mp4">`.
  */
-const getAttachmentUrl = (
-  attachment: Attachment,
+const attachmentsToMedia = (
+  attachments: Attachment[] | undefined,
   instanceUrl: string | undefined
-): string | undefined => {
-  let url: string | undefined;
+): Pick<Post, "images" | "thumbnailUrl" | "url" | "isVideo" | "videoSources"> => {
+  // Drops `audio`/`file` attachments, the same set the app has no way to show.
+  const media = getPicturesAndVideos(attachments ?? []);
 
-  if (attachment.type === "picture" && "picture" in attachment) {
-    url = attachment.picture.url;
-  } else if (attachment.type === "video" && "video" in attachment) {
-    url = attachment.video.url;
-  }
+  const images = media.flatMap((attachment): PostImage[] => {
+    const thumbnailUrl = toAbsoluteUrl(
+      getAttachmentThumbnailSize(attachment)?.url,
+      instanceUrl
+    );
 
-  return toAbsoluteUrl(url, instanceUrl);
+    if (attachment.type === "video" && "video" in attachment) {
+      const { video } = attachment;
+      const videoUrl = toAbsoluteUrl(video.url, instanceUrl);
+      // `url` is the poster frame. Falling back to the video url would break
+      // the <img>, so a video with neither is skipped rather than shown broken.
+      const poster = thumbnailUrl ?? videoUrl;
+      if (!poster) return [];
+      return [
+        {
+          url: poster,
+          fullUrl: videoUrl,
+          width: video.width,
+          height: video.height,
+          videoSources: videoUrl
+            ? [{ source: videoUrl, type: video.type }]
+            : undefined,
+        },
+      ];
+    }
+
+    if (attachment.type === "picture" && "picture" in attachment) {
+      const { picture } = attachment;
+      const pictureUrl = toAbsoluteUrl(picture.url, instanceUrl);
+      const displayUrl = thumbnailUrl ?? pictureUrl;
+      if (!displayUrl) return [];
+      return [
+        {
+          url: displayUrl,
+          fullUrl: pictureUrl,
+          width: picture.width,
+          height: picture.height,
+        },
+      ];
+    }
+
+    return [];
+  });
+
+  const first = images[0];
+
+  return {
+    images: images.length > 0 ? images : undefined,
+    thumbnailUrl: first?.url,
+    url: first?.fullUrl,
+    isVideo: first ? !!first.videoSources?.length : undefined,
+    // Repeated at the post level for app builds that predate video slides.
+    videoSources: first?.videoSources,
+  };
 };
 
 /**
@@ -216,17 +274,6 @@ const getAttachmentUrl = (
 const imageboardThreadToPost = (thread: Thread, instanceId: string): Post => {
   const instanceUrl = getInstanceUrl(instanceId);
   const firstComment = thread.comments?.[0];
-  const thumbnailAttachment =
-    firstComment?.attachments &&
-    firstComment.attachments.filter(doesAttachmentHavePicture)[0];
-  const thumbnail = thumbnailAttachment
-    ? getAttachmentThumbnailSize(thumbnailAttachment)
-    : undefined;
-  const thumbnailUrl = toAbsoluteUrl(thumbnail?.url, instanceUrl);
-  const firstAttachment = firstComment?.attachments?.[0];
-  const attachmentUrl = firstAttachment
-    ? getAttachmentUrl(firstAttachment, instanceUrl)
-    : undefined;
 
   return {
     apiId: String(thread.id),
@@ -238,8 +285,7 @@ const imageboardThreadToPost = (thread: Thread, instanceId: string): Post => {
     authorName: firstComment?.authorName || "Anonymous",
     authorApiId: firstComment?.authorId,
     instanceId: instanceId,
-    thumbnailUrl: thumbnailUrl,
-    url: attachmentUrl,
+    ...attachmentsToMedia(firstComment?.attachments, instanceUrl),
     originalUrl: getThreadOriginalUrl(instanceId, thread.boardId, thread.id),
     numOfComments: thread.commentsCount,
     number: Number(thread.id),
@@ -256,18 +302,6 @@ const imageboardCommentToPost = (
   threadId?: string | number
 ): Post => {
   const instanceUrl = getInstanceUrl(instanceId);
-  const thumbnailAttachment =
-    comment.attachments &&
-    comment.attachments.filter(doesAttachmentHavePicture)[0];
-  const thumbnail = thumbnailAttachment
-    ? getAttachmentThumbnailSize(thumbnailAttachment)
-    : undefined;
-  const thumbnailUrl = toAbsoluteUrl(thumbnail?.url, instanceUrl);
-  const firstAttachment = comment.attachments?.[0];
-  const attachmentUrl = firstAttachment
-    ? getAttachmentUrl(firstAttachment, instanceUrl)
-    : undefined;
-
   const bodyHtml = contentToHtml(comment.content);
 
   return {
@@ -277,8 +311,7 @@ const imageboardCommentToPost = (
     authorName: comment.authorName || "Anonymous",
     authorApiId: comment.authorId,
     instanceId: instanceId,
-    thumbnailUrl: thumbnailUrl,
-    url: attachmentUrl,
+    ...attachmentsToMedia(comment.attachments, instanceUrl),
     originalUrl:
       boardId && threadId
         ? getThreadOriginalUrl(instanceId, boardId, threadId)
@@ -471,31 +504,10 @@ const getComments = async (
     console.log(threadResponse);
 
     const thread = threadResponse.thread;
-    const instanceUrl = getInstanceUrl(instanceId);
 
-    // First comment is the OP (original post)
-    const opComment = thread.comments?.[0];
-    const firstAttachment = opComment?.attachments?.[0];
-    const attachmentUrl = firstAttachment
-      ? getAttachmentUrl(firstAttachment, instanceUrl)
-      : undefined;
-
-    const post: Post = {
-      apiId: String(thread.id),
-      title: thread.title || thread.autogeneratedTitle || `Thread #${thread.id}`,
-      body: opComment ? contentToHtml(opComment.content) : undefined,
-      publishedDate: thread.createdAt?.toISOString(),
-      communityApiId: thread.boardId,
-      communityName: `/${thread.boardId}/`,
-      authorName: opComment?.authorName || "Anonymous",
-      authorApiId: opComment?.authorId,
-      instanceId: instanceId,
-      thumbnailUrl: attachmentUrl,
-      url: attachmentUrl,
-      originalUrl: getThreadOriginalUrl(instanceId, boardId, thread.id),
-      numOfComments: thread.commentsCount,
-      number: Number(thread.id),
-    };
+    // The OP is the thread's first comment, and is mapped exactly as it is in
+    // the feed — this used to be a second, drifted copy of that mapping.
+    const post = imageboardThreadToPost(thread, instanceId);
 
     // Rest are comments (skip first comment which is OP)
     const comments = thread.comments?.slice(1) || [];
