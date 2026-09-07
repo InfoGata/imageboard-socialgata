@@ -426,6 +426,7 @@ const getCommunity = async (
         instanceId: instanceId,
         description: boardInfo?.title || `/${boardId}/`,
         originalUrl: getBoardOriginalUrl(instanceId, boardId),
+        nsfw: boardInfo?.explicitContent || undefined,
       },
       items,
       pageInfo: {},
@@ -468,6 +469,9 @@ const getCommunities = async (
       instanceId: instanceId,
       description: board.title || `/${board.id}/`,
       originalUrl: getBoardOriginalUrl(instanceId, board.id),
+      // An imageboard classifies the board, not the post, so this is the only
+      // signal there is — replies on an adult board carry nothing of their own.
+      nsfw: board.explicitContent || undefined,
     }));
 
     return {
