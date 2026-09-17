@@ -14,11 +14,21 @@ import {
 } from "social-components/attachment";
 
 const CORS_PROXY_KEY = "imageboard_cors_proxy";
-const DEFAULT_CORS_PROXY = "https://vercelcors-elijahgreen-info-gata.vercel.app/api?url=";
+// A deployment of libraries/vercelcors allowlisted to the API hosts of the
+// boards below. Cloudflare workers won't do: 4chan and 2ch refuse them.
+const DEFAULT_CORS_PROXY = "https://vercelcors-imageboard.vercel.app/api?url=";
+// The previous default, a preview deployment that is being shut down. Saving
+// settings stored whatever the field held, so it can be in localStorage.
+const RETIRED_CORS_PROXY =
+  "https://vercelcors-elijahgreen-info-gata.vercel.app/api?url=";
 
 // Get stored CORS proxy or use default
 const getCorsProxy = (): string => {
-  return localStorage.getItem(CORS_PROXY_KEY) || DEFAULT_CORS_PROXY;
+  const stored = localStorage.getItem(CORS_PROXY_KEY);
+  if (!stored || stored === RETIRED_CORS_PROXY) {
+    return DEFAULT_CORS_PROXY;
+  }
+  return stored;
 };
 
 // Thread URL patterns per imageboard (from imageboard library configs)
@@ -542,7 +552,7 @@ const sendMessage = (message: MessageType) => {
 };
 
 const getSettings = () => {
-  const corsProxy = localStorage.getItem(CORS_PROXY_KEY) || DEFAULT_CORS_PROXY;
+  const corsProxy = getCorsProxy();
   sendMessage({
     type: "settings-info",
     corsProxy,
