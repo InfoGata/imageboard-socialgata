@@ -240,6 +240,19 @@ const toAbsoluteUrl = (
   return `${instanceUrl}/${url}`;
 };
 
+type YouTubeAttachment = Attachment & {
+  type: "video";
+  video: { provider: "youtube"; id: string; width?: number; height?: number };
+};
+
+const isYouTubeAttachment = (
+  attachment: Attachment
+): attachment is YouTubeAttachment =>
+  attachment.type === "video" &&
+  "video" in attachment &&
+  attachment.video.provider === "youtube" &&
+  !!attachment.video.id;
+
 /**
  * Flatten a comment's attachments into the media fields of a Post.
  *
@@ -265,6 +278,9 @@ const attachmentsToMedia = (
       getAttachmentThumbnailSize(attachment)?.url,
       instanceUrl
     );
+
+    // Handled below, outside `images`.
+    if (isYouTubeAttachment(attachment)) return [];
 
     if (attachment.type === "video" && "video" in attachment) {
       const { video } = attachment;
@@ -305,6 +321,30 @@ const attachmentsToMedia = (
   });
 
   const first = images[0];
+
+  // A YouTube embed (vichan's `embed` field) has no file to put in a slide.
+  // SocialGata plays a YouTube `url` in place when there are no `images`, so
+  // it goes there instead — vichan doesn't allow a file and an embed on one
+  // post, so there is nothing for it to displace.
+  if (!first) {
+    const youTube = attachments?.find(isYouTubeAttachment);
+    if (youTube) {
+      const { video } = youTube;
+      return {
+        // The app gives a /shorts/ link a portrait player; a vertical video
+        // in a 16:9 box would be mostly letterbox.
+        url:
+          video.width && video.height && video.height > video.width
+            ? `https://www.youtube.com/shorts/${video.id}`
+            : `https://www.youtube.com/watch?v=${video.id}`,
+        thumbnailUrl:
+          getAttachmentThumbnailSize(youTube)?.url ??
+          `https://img.youtube.com/vi/${video.id}/hqdefault.jpg`,
+        // Not a file: `isVideo` would send the YouTube url to <video>.
+        isVideo: false,
+      };
+    }
+  }
 
   return {
     images: images.length > 0 ? images : undefined,
