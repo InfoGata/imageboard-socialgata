@@ -1,6 +1,6 @@
 {
   "name": "imageboard-socialgata",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "description": "SocialGata plugin for Imageboards (4chan, lainchan, etc.)",
   "author": "",
   "dependencies": {

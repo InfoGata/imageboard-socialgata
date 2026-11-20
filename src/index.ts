@@ -299,8 +299,47 @@ const imageboardThreadToPost = (thread: Thread, instanceId: string): Post => {
     originalUrl: getThreadOriginalUrl(instanceId, thread.boardId, thread.id),
     numOfComments: thread.commentsCount,
     number: Number(thread.id),
+    stickied: thread.pinned || undefined,
   };
 };
+
+const SORT_OPTIONS: SortOption[] = [
+  { id: "bump", displayName: "Bump order" },
+  { id: "new", displayName: "Newest" },
+  { id: "replies", displayName: "Most replies" },
+];
+const DEFAULT_SORT_ID = "bump";
+
+/**
+ * Get a board's threads in the requested order. "bump" is the board's own
+ * order (pinned threads first, then the most recently bumped), which the
+ * library only keeps with `sortBy: "bump-order"`; it otherwise re-sorts by
+ * creation date. The other sorts start from that list.
+ */
+const getSortedThreads = async (
+  imageboard: ReturnType<typeof getImageboard>,
+  boardId: string,
+  sortId: string
+) => {
+  const response = await imageboard.getThreads({
+    boardId,
+    sortBy: "bump-order",
+  });
+  const threads = [...(response.threads || [])];
+  if (sortId === "new") {
+    threads.sort(
+      (a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0)
+    );
+  } else if (sortId === "replies") {
+    threads.sort((a, b) => (b.commentsCount ?? 0) - (a.commentsCount ?? 0));
+  }
+  return { ...response, threads };
+};
+
+const getSortId = (sortId?: string): string =>
+  SORT_OPTIONS.some((option) => option.id === sortId)
+    ? sortId!
+    : DEFAULT_SORT_ID;
 
 /**
  * Convert imageboard comment to Post (for comment trees)
@@ -358,6 +397,7 @@ const getInstances = async (): Promise<GetInstancesResponse> => {
 
 const getFeed = async (request?: GetFeedRequest): Promise<GetFeedResponse> => {
   const instanceId = request?.instanceId || "4chan";
+  const sortId = getSortId(request?.sortId);
   let boardId = request?.feedTypeId;
 
   try {
@@ -377,10 +417,7 @@ const getFeed = async (request?: GetFeedRequest): Promise<GetFeedResponse> => {
       throw new Error(`${instanceId} does not support getting threads`);
     }
 
-    const threadsResponse = await imageboard.getThreads({
-      boardId: boardId,
-    });
-    console.log(threadsResponse);
+    const threadsResponse = await getSortedThreads(imageboard, boardId, sortId);
 
     const threads = threadsResponse.threads || [];
     const items = threads.map((thread) =>
@@ -392,6 +429,8 @@ const getFeed = async (request?: GetFeedRequest): Promise<GetFeedResponse> => {
       pageInfo: {
         page: 1,
       },
+      sortOptions: SORT_OPTIONS,
+      sortId,
     };
   } catch (error) {
     console.error("Error fetching imageboard feed:", error);
@@ -407,14 +446,13 @@ const getCommunity = async (
 ): Promise<GetCommunityResponse> => {
   const instanceId = request.instanceId || "4chan";
   const boardId = request.apiId;
+  const sortId = getSortId(request.sortId);
 
   try {
     const imageboard = getImageboard(instanceId);
 
     // Get threads for this board
-    const threadsResponse = await imageboard.getThreads({
-      boardId: boardId,
-    });
+    const threadsResponse = await getSortedThreads(imageboard, boardId, sortId);
 
     const threads = threadsResponse.threads || [];
     const items = threads.map((thread) =>
@@ -440,6 +478,8 @@ const getCommunity = async (
       },
       items,
       pageInfo: {},
+      sortOptions: SORT_OPTIONS,
+      sortId,
     };
   } catch (error) {
     console.error("Error fetching imageboard community:", error);
