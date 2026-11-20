@@ -40,6 +40,18 @@ const THREAD_URL_PATTERNS: Record<string, string> = {
   "2ch": "/{boardId}/res/{threadId}.html",
 };
 
+// Where a single post sits inside its thread page, per imageboard. 4chan
+// anchors posts as `#p<id>`; vichan (lainchan, leftypol), lynxchan (endchan)
+// and makaba (2ch) anchor them by the bare number. These match the
+// `commentUrl` templates in the imageboard library's chan configs.
+const COMMENT_ANCHOR_PATTERNS: Record<string, string> = {
+  "4chan": "#p{commentId}",
+  lainchan: "#{commentId}",
+  leftypol: "#{commentId}",
+  endchan: "#{commentId}",
+  "2ch": "#{commentId}",
+};
+
 /**
  * Build the original URL for a board on its imageboard website
  */
@@ -67,6 +79,22 @@ const getThreadOriginalUrl = (
     .replace("{boardId}", boardId)
     .replace("{threadId}", String(threadId));
   return `${instance.url}${path}`;
+};
+
+/**
+ * Build the original URL for a single post on its imageboard website: the
+ * thread page, scrolled to that post.
+ */
+const getCommentOriginalUrl = (
+  instanceId: string,
+  boardId: string,
+  threadId: string | number,
+  commentId: string | number
+): string | undefined => {
+  const threadUrl = getThreadOriginalUrl(instanceId, boardId, threadId);
+  const anchor = COMMENT_ANCHOR_PATTERNS[instanceId];
+  if (!threadUrl || !anchor) return threadUrl;
+  return `${threadUrl}${anchor.replace("{commentId}", String(commentId))}`;
 };
 
 // Supported imageboards as instances (using library's supported IDs)
@@ -147,10 +175,20 @@ const contentToHtml = (content: unknown): string => {
                   return `<span class="text-green-600">&gt;${obj.content || ""}</span>`;
                 }
                 if (obj.type === "post-link") {
-                  const commentId = (obj.meta as { commentId?: number })
-                    ?.commentId;
-                  const postId = commentId ? String(commentId) : "";
-                  return `<a href="#" class="text-primary hover:underline">&gt;&gt;${postId}</a>`;
+                  const meta = obj.meta as
+                    | { commentId?: number; threadId?: number; boardId?: string }
+                    | undefined;
+                  const postId = meta?.commentId ? String(meta.commentId) : "";
+                  // The thread and board say where the quoted post lives, so
+                  // the app can open a quote from another thread at that post
+                  // rather than guess the post number is a thread.
+                  const threadAttr = meta?.threadId
+                    ? ` data-thread-id="${encodeURIComponent(String(meta.threadId))}"`
+                    : "";
+                  const boardAttr = meta?.boardId
+                    ? ` data-board-id="${encodeURIComponent(meta.boardId)}"`
+                    : "";
+                  return `<a href="#"${threadAttr}${boardAttr} class="text-primary hover:underline">&gt;&gt;${postId}</a>`;
                 }
               }
               return "";
@@ -360,10 +398,11 @@ const imageboardCommentToPost = (
     authorName: comment.authorName || "Anonymous",
     authorApiId: comment.authorId,
     instanceId: instanceId,
+    communityApiId: boardId,
     ...attachmentsToMedia(comment.attachments, instanceUrl),
     originalUrl:
       boardId && threadId
-        ? getThreadOriginalUrl(instanceId, boardId, threadId)
+        ? getCommentOriginalUrl(instanceId, boardId, threadId, comment.id)
         : undefined,
     number: Number(comment.id),
   };
@@ -555,7 +594,6 @@ const getComments = async (
       boardId: boardId,
       threadId: Number(threadId),
     });
-    console.log(threadResponse);
 
     const thread = threadResponse.thread;
 
